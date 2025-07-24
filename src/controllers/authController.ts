@@ -24,7 +24,7 @@ export const register = async (req: Request, res: Response) => {
 
     await newUser.save();
     await sendOTPEmail(email, otp);
-
+    console.log("OTP:",otp);
     res.status(201).json({ message: 'Registered. OTP sent to email.' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -64,10 +64,81 @@ export const verifyOTP = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
+
   if (!user || !(await bcrypt.compare(password, user.password as string))) {
-    return res.status(400).json({ message: 'Invalid credentials' });
+    return res.status(400).json({ message: "Invalid credentials" });
   }
 
-  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET!);
-  res.json({ token });
+  const token = jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET!
+  );
+
+  res.json({
+    message: "Đăng nhập thành công",
+    token,
+    user: {
+      _id: user._id,
+      name: user.name, 
+      email: user.email,
+      role: user.role,
+    },
+  });
 };
+
+// Lấy tất cả học sinh
+export const getAllStudents = async (req: Request, res: Response) => {
+  try {
+    const students = await User.find({ role: 'student' }).select('-password -otp -otpExpires');
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+//Cập nhật 
+export const updateStudent = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updatedData = req.body;
+
+    const student = await User.findOneAndUpdate(
+      { _id: id, role: 'student' },
+      updatedData,
+      { new: true }
+    );
+
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    res.json({ message: 'Student updated', student });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+//Xóa
+export const deleteStudent = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = await User.findOneAndDelete({ _id: id, role: 'student' });
+
+    if (!deleted) return res.status(404).json({ message: 'Student not found' });
+
+    res.json({ message: 'Student deleted' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+//lấy thoog tin theo id
+export const getUserProfile = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id; // ✅ lấy từ URL
+
+    const user = await User.findById(userId).select('-password -otp -otpExpires');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json(user);
+  } catch (err) {
+    console.error("Server error:", err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+

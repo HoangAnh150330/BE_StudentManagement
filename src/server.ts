@@ -3,6 +3,8 @@ import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors'; 
 import authRoutes from './routes/authRoutes'
+import subjectRoutes from './routes/subjectRoutes';
+import classRoutes from './routes/classRoutes';
 dotenv.config();
 
 const app = express();
@@ -15,6 +17,8 @@ app.get('/', (req: Request, res: Response) => {
   res.send('Hello Management');
 });
 app.use('/api/auth', authRoutes);
+app.use("/api/subjects", subjectRoutes);
+app.use("/api/classes", classRoutes);
 mongoose
   .connect(process.env.MONGODB_URI as string)
   .then(() => {
