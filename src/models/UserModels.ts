@@ -4,6 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
+  facebookId:string;
   role: 'admin' | 'student';
   phone: string;
   dob: string;
@@ -17,6 +18,7 @@ const userSchema = new Schema<IUser>({
   name: String,
   email: { type: String, unique: true },
   password: String,
+  facebookId: { type: String, unique: true, sparse: true },
   role: { type: String, enum: ['admin', 'student'], default: 'student' },
   phone: String,
   dob: String,

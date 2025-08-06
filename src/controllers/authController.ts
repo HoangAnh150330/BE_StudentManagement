@@ -85,6 +85,59 @@ export const login = async (req: Request, res: Response) => {
     },
   });
 };
+// đăng nhập fb
+export const facebookLogin = async (req: Request, res: Response) => {
+  try {
+    const { facebookId, email, name } = req.body;
+
+    if (!facebookId) {
+      return res.status(400).json({ message: "Facebook ID is required" });
+    }
+
+    let user = null;
+
+    // Tìm user theo facebookId hoặc email
+    if (email) {
+      user = await User.findOne({
+        $or: [{ facebookId }, { email }]
+      });
+    } else {
+      user = await User.findOne({ facebookId });
+    }
+
+    // Nếu chưa tồn tại → tạo mới
+    if (!user) {
+      user = new User({
+        facebookId,
+        email: email || "",
+        name,
+        role: "student" // Hoặc "user" tùy hệ thống
+      });
+      await user.save();
+    }
+
+    // Tạo token đăng nhập
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" }
+    );
+
+    return res.json({
+      message: "Đăng nhập bằng Facebook thành công",
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error("Facebook login error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 
 // Lấy tất cả học sinh
 export const getAllStudents = async (req: Request, res: Response) => {
