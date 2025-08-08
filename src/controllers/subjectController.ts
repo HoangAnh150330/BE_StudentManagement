@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import Subject from "../models/Subject";
 
-//Lấy tất cả môn hocj
+// Lấy tất cả môn học
 export const getAllSubjects = async (req: Request, res: Response) => {
   try {
     const subjects = await Subject.find().sort({ createdAt: -1 });
@@ -11,19 +11,19 @@ export const getAllSubjects = async (req: Request, res: Response) => {
   }
 };
 
-// Tạo môn học mới
+// Tạo môn học mới
 export const createSubject = async (req: Request, res: Response) => {
   try {
-    const { name, code, credit } = req.body;
+    const { name, code, credit, description, startDate, endDate } = req.body;
 
-    if (!name || !code || credit === undefined)
+    if (!name || !code || credit === undefined || !startDate || !endDate)
       return res.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin" });
 
     const exists = await Subject.findOne({ code });
     if (exists)
       return res.status(409).json({ message: "Mã môn học đã tồn tại" });
 
-    const newSubject = new Subject({ name, code, credit });
+    const newSubject = new Subject({ name, code, credit, description, startDate, endDate });
     await newSubject.save();
 
     res.status(201).json(newSubject);
@@ -32,15 +32,15 @@ export const createSubject = async (req: Request, res: Response) => {
   }
 };
 
-// Cập nhật
+// Cập nhật
 export const updateSubject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, code, credit } = req.body;
+    const { name, code, credit, description, startDate, endDate } = req.body;
 
     const updated = await Subject.findByIdAndUpdate(
       id,
-      { name, code, credit },
+      { name, code, credit, description, startDate, endDate },
       { new: true }
     );
 
@@ -52,7 +52,7 @@ export const updateSubject = async (req: Request, res: Response) => {
   }
 };
 
-// Xóa
+// Xóa
 export const deleteSubject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

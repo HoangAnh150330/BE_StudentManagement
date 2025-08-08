@@ -4,7 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  facebookId:string;
+  facebookId: string;
   role: 'admin' | 'student';
   phone: string;
   dob: string;
@@ -12,6 +12,7 @@ export interface IUser extends Document {
   province: string;
   otp?: string;
   otpExpires?: Date;
+  avatar?: string;
 }
 
 const userSchema = new Schema<IUser>({
@@ -25,7 +26,8 @@ const userSchema = new Schema<IUser>({
   gender: String,
   province: String,
   otp: String,
-  otpExpires: Date
+  otpExpires: Date,
+  avatar: String
 }, { timestamps: true });
 
 export default mongoose.model<IUser>('User', userSchema);
