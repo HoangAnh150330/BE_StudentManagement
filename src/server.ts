@@ -7,6 +7,7 @@ import subjectRoutes from './routes/subjectRoutes';
 import classRoutes from './routes/classRoutes';
 import { v2 as cloudinary } from 'cloudinary';
 import scheduleRoutes from './routes/scheduleRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 dotenv.config();
 
 const app = express();
@@ -28,6 +29,7 @@ app.use('/api/auth', authRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/classes", classRoutes);
 app.use("/api/schedule", scheduleRoutes);
+app.use("/api/upload",uploadRoutes)
 mongoose
   .connect(process.env.MONGODB_URI as string)
   .then(() => {

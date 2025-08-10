@@ -1,25 +1,26 @@
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
+
+const TEMP_DIR = path.resolve('./uploads/temp');
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
-  destination: './uploads/temp/',
+  destination: (_req, _file, cb) => cb(null, TEMP_DIR),
   filename: (req, file, cb) => {
-    cb(null, `${req.params.id}-${Date.now()}${path.extname(file.originalname)}`);
+    const ownerId = (req.params.id || 'anonymous').toString();
+    cb(null, `${ownerId}-${Date.now()}${path.extname(file.originalname)}`);
   },
 });
 
-const upload = multer({
+const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.mimetype);
+  if (!ok) return cb(new Error('Chỉ chấp nhận ảnh (jpg, jpeg, png, webp)'));
+  cb(null, true);
+};
+
+export const uploadImage = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
-    if (extname && mimetype) {
-      return cb(null, true);
-    }
-    cb(new Error('Chỉ hỗ trợ định dạng .png, .jpg và .jpeg!'));
-  },
-});
-
-export const uploadAvatarMiddleware = upload.single('avatar');
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+}).single('file'); // field name = "file"
