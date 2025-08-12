@@ -27,7 +27,7 @@ jobs:
             .yarnrc.yml
             **/.yarn/cache
 
-      - name: Enable Corepack (use packageManager: yarn@4.9.2)
+      - name: "Enable Corepack (use packageManager: yarn@4.9.2)"
         run: corepack enable
 
       - name: Install deps (Yarn Berry)
