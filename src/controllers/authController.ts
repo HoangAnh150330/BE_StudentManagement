@@ -1,9 +1,17 @@
-import { Request, Response } from 'express';
-import User from '../models/UserModels';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { sendOTPEmail, generateOTP } from '../utils/otp';
-import PendingUser from '../models/PendingUser';
+import { Request, Response } from "express";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import User from "../models/UserModels";
+import PendingUser from "../models/PendingUser";
+import { sendOTPEmail, generateOTP } from "../utils/otp";
+
+interface ChangePasswordBody {
+  currentPassword: string;
+  newPassword: string;
+}
+
+const signToken = (payload: { id: string; role: string }) =>
+  jwt.sign(payload, process.env.JWT_SECRET as string, { expiresIn: "7d" });
 
 // ========== Auth & OTP ==========
 
@@ -12,7 +20,7 @@ export const register = async (req: Request, res: Response) => {
     const { name, email, password, role } = req.body;
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: 'Email đã tồn tại' });
+    if (existingUser) return res.status(400).json({ message: "Email đã tồn tại" });
 
     const hashed = await bcrypt.hash(password, 10);
     const otp = generateOTP();
@@ -23,22 +31,19 @@ export const register = async (req: Request, res: Response) => {
         name,
         email,
         password: hashed,
-        role: role || 'student',
+        role: role || "student",
         otp,
         otpExpires: new Date(Date.now() + 10 * 60 * 1000),
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    res.status(200).json({ message: 'Đăng ký bước 1 thành công. OTP đã gửi email.' });
-
-    // gửi OTP không chặn response
-    sendOTPEmail(email, otp).catch(err => {
-      console.error('Gửi OTP lỗi:', err);
-    });
+    // Trả về ngay, email gửi nền
+    res.status(200).json({ message: "Đăng ký bước 1 thành công. OTP đã gửi email." });
+    sendOTPEmail(email, otp).catch((err) => console.error("Gửi OTP lỗi:", err));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Lỗi server' });
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -47,10 +52,10 @@ export const resendOTP = async (req: Request, res: Response) => {
     const { email } = req.body;
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: 'Tài khoản đã xác minh' });
+    if (existingUser) return res.status(400).json({ message: "Tài khoản đã xác minh" });
 
     const pending = await PendingUser.findOne({ email });
-    if (!pending) return res.status(404).json({ message: 'Không tìm thấy yêu cầu đăng ký đang chờ' });
+    if (!pending) return res.status(404).json({ message: "Không tìm thấy yêu cầu đăng ký đang chờ" });
 
     const otp = generateOTP();
     pending.otp = otp;
@@ -58,9 +63,9 @@ export const resendOTP = async (req: Request, res: Response) => {
     await pending.save();
 
     await sendOTPEmail(email, otp);
-    return res.json({ message: 'OTP đã được gửi lại đến email' });
+    return res.json({ message: "OTP đã được gửi lại đến email" });
   } catch {
-    return res.status(500).json({ message: 'Lỗi server' });
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
 
@@ -69,13 +74,13 @@ export const verifyOTP = async (req: Request, res: Response) => {
     const { email, otp } = req.body;
 
     const already = await User.findOne({ email });
-    if (already) return res.status(400).json({ message: 'Tài khoản đã xác minh' });
+    if (already) return res.status(400).json({ message: "Tài khoản đã xác minh" });
 
     const pending = await PendingUser.findOne({ email });
-    if (!pending) return res.status(404).json({ message: 'Không tìm thấy yêu cầu đăng ký đang chờ' });
+    if (!pending) return res.status(404).json({ message: "Không tìm thấy yêu cầu đăng ký đang chờ" });
 
     if (pending.otp !== otp || pending.otpExpires < new Date()) {
-      return res.status(400).json({ message: 'OTP không hợp lệ hoặc đã hết hạn' });
+      return res.status(400).json({ message: "OTP không hợp lệ hoặc đã hết hạn" });
     }
 
     const user = await User.create({
@@ -87,29 +92,25 @@ export const verifyOTP = async (req: Request, res: Response) => {
 
     await pending.deleteOne();
 
-    return res.json({ message: 'Xác minh OTP thành công, tài khoản đã được tạo', userId: user._id });
+    return res.json({ message: "Xác minh OTP thành công, tài khoản đã được tạo", userId: user._id });
   } catch (err) {
-    return res.status(500).json({ message: 'Lỗi server' });
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
 
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+password");
 
-    if (!user || !(await bcrypt.compare(password, user.password as string))) {
-      return res.status(400).json({ message: 'Thông tin đăng nhập không hợp lệ' });
+    if (!user || !(await bcrypt.compare(password, (user.password as string) || ""))) {
+      return res.status(400).json({ message: "Thông tin đăng nhập không hợp lệ" });
     }
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET as string,
-      { expiresIn: '7d' } // tuỳ chỉnh
-    );
+    const token = signToken({ id: String(user._id), role: user.role as string });
 
     res.json({
-      message: 'Đăng nhập thành công',
+      message: "Đăng nhập thành công",
       token,
       user: {
         _id: user._id,
@@ -120,45 +121,29 @@ export const login = async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    console.error('Lỗi đăng nhập:', err);
-    res.status(500).json({ message: 'Lỗi server' });
+    console.error("Lỗi đăng nhập:", err);
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
 export const facebookLogin = async (req: Request, res: Response) => {
   try {
     const { facebookId, email, name } = req.body;
+    if (!facebookId) return res.status(400).json({ message: "Yêu cầu Facebook ID" });
 
-    if (!facebookId) {
-      return res.status(400).json({ message: 'Yêu cầu Facebook ID' });
-    }
-
-    let user = null;
-
-    if (email) {
-      user = await User.findOne({ $or: [{ facebookId }, { email }] });
-    } else {
-      user = await User.findOne({ facebookId });
-    }
+    let user = email
+      ? await User.findOne({ $or: [{ facebookId }, { email }] })
+      : await User.findOne({ facebookId });
 
     if (!user) {
-      user = new User({
-        facebookId,
-        email: email || '',
-        name,
-        role: 'student',
-      });
+      user = new User({ facebookId, email: email || "", name, role: "student" });
       await user.save();
     }
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET as string,
-      { expiresIn: '7d' }
-    );
+    const token = signToken({ id: String(user._id), role: user.role as string });
 
     return res.json({
-      message: 'Đăng nhập bằng Facebook thành công',
+      message: "Đăng nhập bằng Facebook thành công",
       token,
       user: {
         _id: user._id,
@@ -169,61 +154,46 @@ export const facebookLogin = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi đăng nhập Facebook:', error);
-    return res.status(500).json({ message: 'Lỗi server' });
+    console.error("Lỗi đăng nhập Facebook:", error);
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };
 
-// ========== Students & Profile ==========
-
-export const getAllStudents = async (_req: Request, res: Response) => {
+// ========== Change Password ==========
+// PUT /students/:id/change-password  (hoặc /auth/change-password lấy id từ req.user)
+export const changePassword = async (req: Request, res: Response) => {
   try {
-    const students = await User.find({ role: 'student' }).select('-password -otp -otpExpires');
-    res.json(students);
-  } catch (err) {
-    res.status(500).json({ message: 'Lỗi server' });
-  }
-};
+    const paramId = req.params.id; // dùng param nếu có
+    const authId = (req as any).user?.id as string | undefined; // nếu bạn gắn ở middleware
+    const id = paramId || authId;
 
-export const updateStudent = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
-
-    const student = await User.findByIdAndUpdate(id, updateData, { new: true });
-    if (!student) {
-      return res.status(404).json({ message: 'Student not found' });
+    const { currentPassword, newPassword } = req.body as ChangePasswordBody;
+    if (!id) return res.status(400).json({ message: "Thiếu id người dùng." });
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Thiếu dữ liệu." });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: "Mật khẩu mới không được trùng mật khẩu hiện tại." });
     }
 
-    return res.json({ message: 'Update successful', student });
+    // enforce rule server-side
+    const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}$/;
+    if (!strong.test(newPassword)) {
+      return res.status(400).json({ message: "Mật khẩu mới không đạt yêu cầu." });
+    }
+
+    const user = await User.findById(id).select("+password");
+    if (!user || !user.password) return res.status(404).json({ message: "Không tìm thấy người dùng." });
+
+    const ok = await bcrypt.compare(currentPassword, user.password as string);
+    if (!ok) return res.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    return res.json({ message: "Đổi mật khẩu thành công." });
   } catch (err) {
-    console.error('Error updating student:', err);
-    return res.status(500).json({ message: 'Server error', error: err });
-  }
-};
-
-export const deleteStudent = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const deleted = await User.findOneAndDelete({ _id: id, role: 'student' });
-
-    if (!deleted) return res.status(404).json({ message: 'Không tìm thấy học sinh' });
-
-    res.json({ message: 'Xóa học sinh thành công' });
-  } catch (err) {
-    res.status(500).json({ message: 'Lỗi server' });
-  }
-};
-
-export const getUserProfile = async (req: Request, res: Response) => {
-  try {
-    const userId = req.params.id;
-    const user = await User.findById(userId).select('-password -otp -otpExpires');
-    if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng' });
-
-    res.json(user);
-  } catch (err) {
-    console.error('Lỗi server:', err);
-    res.status(500).json({ message: 'Lỗi server' });
+    console.error("changePassword error:", err);
+    return res.status(500).json({ message: "Lỗi server" });
   }
 };

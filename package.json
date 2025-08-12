@@ -12,6 +12,7 @@
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "moment": "^2.30.1",
     "mongoose": "^8.16.4",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.5"
@@ -30,7 +31,7 @@
     "typescript": "^5.8.3"
   },
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "ts-node-dev -r dotenv/config --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   }
