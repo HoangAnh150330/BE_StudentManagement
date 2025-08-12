@@ -1,0 +1,61 @@
+name: Node.js CI Student_MN
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  building:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: yarn
+          cache-dependency-path: |
+            yarn.lock
+            .yarnrc.yml
+            **/.yarn/cache
+
+      - name: Enable Corepack (use packageManager: yarn@4.9.2)
+        run: corepack enable
+
+      - name: Install deps (Yarn Berry)
+        run: yarn install --immutable
+
+      - name: Lint (if script exists)
+        shell: bash
+        run: |
+          if yarn -s run | grep -qE '^\s+lint\s'; then
+            yarn lint
+          else
+            echo "No lint script. Skipping."
+          fi
+
+      - name: Build (if script exists)
+        shell: bash
+        run: |
+          if yarn -s run | grep -qE '^\s+build\s'; then
+            yarn build
+          else
+            echo "No build script. Skipping."
+          fi
+
+      - name: Test (if script exists)
+        shell: bash
+        run: |
+          if yarn -s run | grep -qE '^\s+test\s'; then
+            yarn test --ci
+          else
+            echo "No test script. Skipping."
+          fi
