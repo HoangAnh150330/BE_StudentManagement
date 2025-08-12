@@ -183,7 +183,7 @@ export const changePassword = async (req: Request, res: Response) => {
     }
 
     const user = await User.findById(id).select("+password");
-    if (!user || !user.password) return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    if (!user || !user.password) return res.status(404).json({ message: "Không tìm thấy người dùng nào cả." });
 
     const ok = await bcrypt.compare(currentPassword, user.password as string);
     if (!ok) return res.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
