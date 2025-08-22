@@ -2,7 +2,6 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import multer from "multer";
-import { authMiddleware } from "../middleware/authmiddleware";
 
 const router = express.Router();
 
@@ -11,12 +10,12 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, uploadDir),
-  filename:    (_, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+  filename: (_, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 const upload = multer({ storage });
 
-// Nếu upload dùng nội bộ → nên yêu cầu auth
-router.post("/", authMiddleware, upload.single("file"), (req, res) => {
+// POST /api/upload  -> { success:true, data: { url,size,name } }
+router.post("/", upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, message: "No file" });
   const url = `/uploads/${req.file.filename}`;
   return res.json({

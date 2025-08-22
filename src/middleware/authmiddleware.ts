@@ -1,23 +1,52 @@
-import { Request, Response, NextFunction } from "express";
-import jwt, { JwtPayload } from "jsonwebtoken";
+import type { RequestHandler } from "express";
+import jwt, { type JwtPayload } from "jsonwebtoken";
+import type { Role, ReqUser } from "../types/express"; // chỉ để dùng type
 
-export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const raw = req.headers.authorization as string | undefined;
-  console.log("Auth header =", raw);
-  console.log("JWT_SECRET set =", !!process.env.JWT_SECRET);
+type TokenPayload = JwtPayload & {
+  id?: string;          // có nơi dùng id
+  _id?: string;         // có nơi dùng _id
+  email?: string;
+  role?: Role;
+  name?: string;
+};
 
+export const authMiddleware: RequestHandler = (req, res, next) => {
+  const raw = req.headers.authorization;
   if (!raw) return res.status(401).json({ message: "No token provided" });
 
-  // lấy phần sau 'Bearer', bỏ ngoặc kép & khoảng trắng
   const token = raw.replace(/^Bearer\s+/i, "").replace(/^"|"$/g, "").trim();
   if (!token) return res.status(401).json({ message: "No token provided" });
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload & { id?: string; role?: string };
-    (req as any).user = { id: decoded.id, role: decoded.role };
-    return next();
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error("JWT_SECRET is not configured");
+
+    const decoded = jwt.verify(token, secret) as TokenPayload;
+
+    const id = decoded._id || decoded.id;
+    const email = decoded.email;
+    const role = decoded.role;
+
+    // đảm bảo đúng shape ReqUser
+    if (!id || !email || !role) {
+      return res.status(401).json({ message: "Invalid token payload" });
+    }
+
+    req.user = { _id: id, email, role, name: decoded.name } as ReqUser;
+    next();
   } catch (err: any) {
-    console.error("JWT verify error:", err?.name, err?.message);
-    return res.status(401).json({ message: err?.name === "TokenExpiredError" ? "Token expired" : "Invalid token" });
+    return res.status(401).json({
+      message: err?.name === "TokenExpiredError" ? "Token expired" : "Invalid token",
+    });
   }
 };
+
+// Optional: giới hạn vai trò
+export const requireRole =
+  (...roles: Role[]): RequestHandler =>
+  (req, res, next) => {
+    const role = req.user?.role;
+    if (!role) return res.status(401).json({ message: "Unauthorized" });
+    if (!roles.includes(role)) return res.status(403).json({ message: "Forbidden" });
+    next();
+  };

@@ -1,4 +1,5 @@
-import mongoose, { Schema, Document } from "mongoose";
+// models/Class.ts
+import mongoose, { Schema, Document, Types } from "mongoose";
 
 export interface ITimeSlot {
   day: string;
@@ -8,9 +9,10 @@ export interface ITimeSlot {
 export interface IClass extends Document {
   name: string;
   subject: string;
-  teacher: string;
+  teacherId: Types.ObjectId;     // ref User
   maxStudents: number;
   timeSlots: ITimeSlot[];
+  teacherName?: string;
 }
 
 const TimeSlotSchema = new Schema<ITimeSlot>({
@@ -22,26 +24,24 @@ const ClassSchema = new Schema<IClass>(
   {
     name: { type: String, required: true },
     subject: { type: String, required: true },
-    teacher: { type: String, required: true },
+    teacherId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     maxStudents: { type: Number, required: true, min: 1 },
     timeSlots: { type: [TimeSlotSchema], required: true },
   },
   { timestamps: true }
 );
 
-export default mongoose.model<IClass>("Class", ClassSchema);
+ClassSchema.virtual("teacherName").get(function (this: any) {
+  const t = this.teacherId;
+  if (t && typeof t === "object" && "name" in t) {
+    return (t as { name?: string }).name;
+  }
+  return undefined;
+});
 
-// chuẩn bị step 2 
-// thiết lập CI/CD cho BE 
-// Vẽ Diagram của structure DB 
-// Học thuộc 
-// Hiểu rõ hook , react hook , dùng react version , node module , yarn , ..... package json , packagelog json
-// quản lý form 
-// thêm boostrap tailwind 
-// state management trong react là j 
-// tại sao lại schema , interface extend ngoài extend có j nữa k 
-// chưa require 
-// cách validate trong form 
-// upload ảnh , cloudinary xem coi còn dùng j thêm kh 
-// social login : FB , GG , --done
-// SSO login là j ? 
+// Xuất JSON có kèm virtuals
+ClassSchema.set("toJSON", {
+  virtuals: true,
+});
+
+export default mongoose.model<IClass>("Class", ClassSchema);

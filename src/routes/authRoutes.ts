@@ -6,7 +6,7 @@ import {
   resendOTP,
   facebookLogin,
   changePassword,
-} from "../controllers/authController";
+} from "../controllers/auth-controller";
 import { authMiddleware } from "../middleware/authmiddleware";
 
 const router = Router();

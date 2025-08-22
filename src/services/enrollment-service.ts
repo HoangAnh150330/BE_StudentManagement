@@ -1,12 +1,11 @@
-import { Request, Response } from "express";
+// services/enrollment-service.ts
 import moment from "moment";
 import Enrollment from "../models/Enrollment";
 import Class from "../models/Class";
 import { hasConflict } from "../utils/schedule";
+import { AppError, HttpStatus } from "../utils/http";
 
-type AuthReq = Request & { user?: { id?: string; role?: string } };
-
-// ===== Helpers cho policy hủy =====
+/* ===== Helpers cho policy hủy ===== */
 const dayMap: Record<string, number> = {
   "Chủ nhật": 0,
   "Thứ 2": 1,
@@ -55,61 +54,62 @@ function getFirstSessionDate(timeSlots: any[]): Date | null {
   return candidates[0];
 }
 
-// ========== Controllers ==========
-export const enrollClass = async (req: AuthReq, res: Response) => {
-  try {
-    const classId = req.params.classId || (req.body as any)?.classId;
-    const studentId = req.user?.id;
+type UserCtx = { id?: string; role?: string };
 
-    if (!classId) return res.status(400).json({ message: "Thiếu classId" });
-    if (!studentId) return res.status(401).json({ message: "Unauthorized" });
+export const EnrollmentService = {
+  /** Đăng ký lớp (chặn lớp đầy & trùng lịch với lớp đã approved) */
+  async enroll(params: { classId?: string; user?: UserCtx }) {
+    const { classId, user } = params;
+
+    if (!classId) throw new AppError("Thiếu classId", HttpStatus.BAD_REQUEST);
+    if (!user?.id) throw new AppError("Unauthorized", HttpStatus.UNAUTHORIZED);
 
     const cls = await Class.findById(classId).lean();
-    if (!cls) return res.status(404).json({ message: "Lớp không tồn tại" });
+    if (!cls) throw new AppError("Lớp không tồn tại", HttpStatus.NOT_FOUND);
 
     // kiểm tra sĩ số: chỉ tính enrollment đã approved
     const currentCount = await Enrollment.countDocuments({ class: classId, status: "approved" });
     if (currentCount >= (cls.maxStudents || 1)) {
-      return res.status(400).json({ message: "Lớp đã đầy" });
+      throw new AppError("Lớp đã đầy", HttpStatus.CONFLICT);
     }
 
     // kiểm tra trùng lịch với các lớp đã approved
-    const enrolled = await Enrollment.find({ student: studentId, status: "approved" })
+    const enrolled = await Enrollment.find({ student: user.id, status: "approved" })
       .populate({ path: "class", select: "timeSlots" })
       .lean();
 
     const existingSlots = enrolled.flatMap((e: any) => e.class?.timeSlots || []);
     if (hasConflict(existingSlots, cls.timeSlots || [])) {
-      return res.status(409).json({ message: "Trùng lịch với lớp đã đăng ký" });
+      throw new AppError("Trùng lịch với lớp đã đăng ký", HttpStatus.CONFLICT);
     }
 
     // tạo bản ghi (mặc định approved, theo schema)
-    await Enrollment.create({ student: studentId, class: classId, status: "approved" });
-    return res.status(201).json({ message: "Đăng ký thành công" });
-  } catch (e: any) {
-    if (e?.code === 11000) {
-      // unique index { student, class }
-      return res.status(409).json({ message: "Bạn đã đăng ký lớp này" });
+    try {
+      await Enrollment.create({ student: user.id, class: classId, status: "approved" });
+    } catch (e: any) {
+      // Chuẩn hoá duplicate key thành 409 để controller có thể trả fail chuẩn
+      if (e?.code === 11000) {
+        throw new AppError("Bạn đã đăng ký lớp này", HttpStatus.CONFLICT);
+      }
+      throw e;
     }
-    console.error("enrollClass error:", e);
-    return res.status(500).json({ message: "Lỗi hệ thống" });
-  }
-};
 
-export const cancelEnrollment = async (req: AuthReq, res: Response) => {
-  try {
-    const classId = req.params.classId || (req.body as any)?.classId;
-    const studentId = req.user?.id;
+    return { message: "Đăng ký thành công" };
+  },
 
-    if (!classId) return res.status(400).json({ message: "Thiếu classId" });
-    if (!studentId) return res.status(401).json({ message: "Unauthorized" });
+  /** Hủy đăng ký (policy: trước buổi đầu N giờ, trừ admin) */
+  async cancel(params: { classId?: string; user?: UserCtx }) {
+    const { classId, user } = params;
+
+    if (!classId) throw new AppError("Thiếu classId", HttpStatus.BAD_REQUEST);
+    if (!user?.id) throw new AppError("Unauthorized", HttpStatus.UNAUTHORIZED);
 
     // Lấy enrollment + lớp để kiểm tra policy
-    const enr = await Enrollment.findOne({ student: studentId, class: classId })
+    const enr = await Enrollment.findOne({ student: user.id, class: classId })
       .populate({ path: "class", select: "timeSlots name" });
-    if (!enr) return res.status(404).json({ message: "Bạn chưa đăng ký lớp này" });
+    if (!enr) throw new AppError("Bạn chưa đăng ký lớp này", HttpStatus.NOT_FOUND);
 
-    const isAdmin = req.user?.role === "admin";
+    const isAdmin = user.role === "admin";
     const firstSession = getFirstSessionDate((enr as any).class?.timeSlots || []);
 
     // cutoffHours có thể cấu hình qua ENV, mặc định 24h
@@ -118,26 +118,22 @@ export const cancelEnrollment = async (req: AuthReq, res: Response) => {
     if (!isAdmin && firstSession) {
       const cutoff = moment(firstSession).subtract(cutoffHours, "hours");
       if (moment().isAfter(cutoff)) {
-        return res.status(409).json({
-          message: `Không thể hủy: phải hủy tối thiểu ${cutoffHours} giờ trước buổi học đầu tiên`,
-        });
+        throw new AppError(
+          `Không thể hủy: phải hủy tối thiểu ${cutoffHours} giờ trước buổi học đầu tiên`,
+          HttpStatus.CONFLICT
+        );
       }
     }
 
     await enr.deleteOne();
-    return res.json({ message: "Đã hủy đăng ký" });
-  } catch (e) {
-    console.error("cancelEnrollment error:", e);
-    return res.status(500).json({ message: "Lỗi hệ thống" });
-  }
-};
+    return { message: "Đã hủy đăng ký" };
+  },
 
-export const getStudentSchedule = async (req: AuthReq, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) return res.status(400).json({ message: "Thiếu studentId" });
+  /** Lấy thời khóa biểu của 1 sinh viên (chỉ lớp approved) */
+  async getStudentSchedule(studentId?: string) {
+    if (!studentId) throw new AppError("Thiếu studentId", HttpStatus.BAD_REQUEST);
 
-    const enrolls = await Enrollment.find({ student: id, status: "approved" })
+    const enrolls = await Enrollment.find({ student: studentId, status: "approved" })
       .populate({ path: "class", select: "name subject teacher timeSlots" })
       .lean();
 
@@ -149,9 +145,6 @@ export const getStudentSchedule = async (req: AuthReq, res: Response) => {
       timeSlots: e.class?.timeSlots || [],
     }));
 
-    return res.json(items);
-  } catch (e) {
-    console.error("getStudentSchedule error:", e);
-    return res.status(500).json({ message: "Lỗi hệ thống" });
-  }
+    return items;
+  },
 };

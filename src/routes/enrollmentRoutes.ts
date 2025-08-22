@@ -1,5 +1,5 @@
 import express from "express";
-import { enrollClass, cancelEnrollment, getStudentSchedule } from "../controllers/enrollController";
+import { enrollClass, cancelEnrollment, getStudentSchedule } from "../controllers/enrollment-controller";
 import { authMiddleware } from "../middleware/authmiddleware";
 
 const router = express.Router();
