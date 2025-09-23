@@ -120,11 +120,49 @@ export const ScheduleService = {
 
   /** Lấy lịch theo giáo viên đăng nhập */
   async getScheduleForTeacher(user?: User) {
-    if (!user?._id) throw new AppError("Unauthorized", HttpStatus.UNAUTHORIZED);
-    return ClassModel.find({ teacherId: user._id })
-      .select("_id name subject schedule room")
-      .lean();
-  },
+  if (!user?._id) throw new AppError("Unauthorized", HttpStatus.UNAUTHORIZED);
+
+  const classes = await ClassModel.find({ teacherId: user._id })
+    .populate("teacherId", "name email")
+    .lean<ClassDocLean[]>({ virtuals: true });
+
+  const today = new Date();
+
+  return classes.map((cls) => {
+    const teacherName =
+      cls.teacherId?.name ?? cls.teacherName ?? cls.teacher ?? "Không xác định";
+
+    // chuẩn hoá timeSlots từ cls.timeSlots hoặc cls.schedule
+    const timeSlots =
+      (cls.timeSlots ?? []).map((slot: TimeSlot) => {
+        const key = (slot.day || "").trim().toLowerCase();
+        const targetIdx = DAY_INDEX[key] ?? today.getDay();
+        const classDate = nextDateFromDay(today, targetIdx);
+
+        const { startH, startM, endH, endM } = parseSlot(slot.slot);
+        const start = new Date(classDate);
+        start.setHours(startH, startM, 0, 0);
+        const end = new Date(classDate);
+        end.setHours(endH, endM, 0, 0);
+
+        return {
+          day: slot.day,
+          slot: slot.slot,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        };
+      });
+
+    return {
+      _id: cls._id,
+      name: cls.name ?? "Không xác định",
+      subject: cls.subject ?? "Không xác định",
+      teacher: teacherName,
+      timeSlots,
+    };
+  });
+},
+
 
   /** Cập nhật lịch dạy một lớp (chỉ admin hoặc giáo viên phụ trách) */
   async updateSchedule(params: { classId?: string; schedule?: string; user?: User }) {

@@ -1,4 +1,3 @@
-// services/teacherClass-service.ts
 import { Types } from "mongoose";
 import ClassModel from "../models/Class";
 import EnrollmentModel from "../models/Enrollment";
@@ -82,8 +81,12 @@ export const TeacherClassService = {
   async getTeacherSchedule(user?: UserCtx) {
     const uid = needAuth(user);
     const docs = await ClassModel.find({ teacherId: new Types.ObjectId(uid) })
-      .select("_id name subject timeSlots room")
+      .select("_id name classname subject timeSlots room") // lấy cả name & classname
       .lean();
-    return docs;
-  },
+
+    return docs.map(d => ({
+      ...d,
+      name: (d as any).name ?? (d as any).classname, // hợp nhất
+    }));
+  }
 };

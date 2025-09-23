@@ -30,3 +30,15 @@ export async function updateGrade(req: Request, res: Response) {
     return fail(res, e, "Lỗi chỉnh sửa điểm");
   }
 }
+export async function getGrades(req: Request, res: Response) {
+  try {
+    const { classId, type } = req.query as { classId?: string; type?: string };
+    if (!classId || !type) {
+      throw new AppError("Thiếu classId/type", HttpStatus.BAD_REQUEST);
+    }
+    const list = await GradeService.getByClassAndType({ classId, type });
+    return ok(res, list, HttpStatus.OK);
+  } catch (e) {
+    return fail(res, e, "Lỗi lấy điểm");
+  }
+}

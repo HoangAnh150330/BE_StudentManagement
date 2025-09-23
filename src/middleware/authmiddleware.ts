@@ -18,17 +18,14 @@ export const authMiddleware: RequestHandler = (req, res, next) => {
   if (!token) return res.status(401).json({ message: "No token provided" });
 
   try {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error("JWT_SECRET is not configured");
-
+    const secret = process.env.JWT_SECRET!;
     const decoded = jwt.verify(token, secret) as TokenPayload;
 
-    const id = decoded._id || decoded.id;
-    const email = decoded.email;
-    const role = decoded.role;
+    const id   = decoded._id || decoded.id || (decoded as any).userId;
+    const role = decoded.role as Role | undefined;
+    const email = typeof decoded.email === "string" ? decoded.email : undefined;
 
-    // đảm bảo đúng shape ReqUser
-    if (!id || !email || !role) {
+    if (!id || !role) { // chỉ cần id + role
       return res.status(401).json({ message: "Invalid token payload" });
     }
 
@@ -40,6 +37,7 @@ export const authMiddleware: RequestHandler = (req, res, next) => {
     });
   }
 };
+
 
 // Optional: giới hạn vai trò
 export const requireRole =

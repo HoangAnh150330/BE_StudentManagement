@@ -62,7 +62,7 @@ export const GradeService = {
       matched: result.matchedCount ?? 0,
     };
   },
-
+  
   async updateOne(params: { id?: string; score?: number; note?: string }) {
     const { id, score, note } = params;
     const oid = toOid(id, "gradeId");
@@ -85,4 +85,18 @@ export const GradeService = {
     if (!updated) throw new AppError("Không tìm thấy bản điểm để cập nhật", HttpStatus.NOT_FOUND);
     return updated;
   },
+  async getByClassAndType(params: { classId?: string; type?: string }) {
+    const classOid = toOid(params.classId, "classId");
+    const docs = await GradeModel.find({ classId: classOid, type: params.type })
+      .select("studentId score note")
+      .lean();
+
+    // Chuẩn hoá output về { studentId: string, score: number, note?: string }[]
+    return docs.map(d => ({
+      studentId: String(d.studentId),
+      score: Number(d.score),
+      note: (d as { note?: string }).note,
+    }));
+  },
+
 };

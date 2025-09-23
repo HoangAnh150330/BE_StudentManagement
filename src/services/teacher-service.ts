@@ -1,4 +1,3 @@
-// services/teacher-service.ts
 import { Types } from "mongoose";
 import ClassModel from "../models/Class";
 import { AttendanceService } from "./attendance-service";
