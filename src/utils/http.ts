@@ -28,8 +28,8 @@ export class AppError extends Error {
 export const ok = <T>(res: Response, data: T, status: HttpStatus = HttpStatus.OK) =>
   res.status(status).json({ success: true, data });
 
-export const fail = (res: Response, error: unknown, fallback = "Internal Server Error") => {
-  const status = error instanceof AppError ? error.status : HttpStatus.INTERNAL;
-  const message = error instanceof Error ? (error.message || fallback) : fallback;
-  return res.status(status).json({ success: false, message });
+export const fail = (res: Response, error: any, message?: string) => {
+  return res.status(error.status || HttpStatus.INTERNAL_SERVER_ERROR).json({
+    message: message || error.message || "Lỗi không xác định",
+  });
 };

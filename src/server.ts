@@ -13,9 +13,10 @@ import classRoutes from "./routes/classRoutes";
 import scheduleRoutes from "./routes/scheduleRoutes";
 import uploadRoutes from "./routes/uploadRoutes";
 import enrollmentRoutes from "./routes/enrollmentRoutes";
-import studentRoutes from "./routes/studentRoutes";   // /api/admin/students/*
-import adminRoutes from "./routes/adminRoutes";       // /api/admin/*
-import teacherRoutes from "./routes/teacherRoutes";   // /api/teacher/*
+import studentRoutes from "./routes/studentRoutes";  
+import adminRoutes from "./routes/adminRoutes";       
+import teacherRoutes from "./routes/teacherRoutes";   
+import announcementRoutes from "./routes/anoucementRoutes";
 
 // Error utils & middlewares
 import { HttpStatus } from "./utils/http";
@@ -71,7 +72,7 @@ app.use("/api/classes", classRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/enrollments", enrollmentRoutes);
-
+app.use("/api/announcements", announcementRoutes);
 // Admin
 app.use("/api/admin/students", studentRoutes);
 app.use("/api/admin", adminRoutes);

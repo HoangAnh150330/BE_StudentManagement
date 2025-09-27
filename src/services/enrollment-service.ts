@@ -23,11 +23,6 @@ function parseSlot(slot: string) {
   return { sh, sm, eh, em };
 }
 
-/**
- * Lấy thời điểm "buổi học đầu tiên" dựa trên timeSlots.
- * - Nếu timeSlot có start => dùng tuần của start, nhảy đến đúng thứ + giờ; nếu vẫn trước start => +7 ngày.
- * - Nếu không có start => suy theo tuần hiện tại; nếu đã qua => +7 ngày.
- */
 function getFirstSessionDate(timeSlots: any[]): Date | null {
   const candidates: Date[] = [];
 
@@ -54,7 +49,7 @@ function getFirstSessionDate(timeSlots: any[]): Date | null {
   return candidates[0];
 }
 
-type UserCtx = { id?: string; role?: string };
+type UserCtx = { _id?: string; role?: string };
 
 export const EnrollmentService = {
   /** Đăng ký lớp (chặn lớp đầy & trùng lịch với lớp đã approved) */
@@ -62,19 +57,23 @@ export const EnrollmentService = {
     const { classId, user } = params;
 
     if (!classId) throw new AppError("Thiếu classId", HttpStatus.BAD_REQUEST);
-    if (!user?.id) throw new AppError("Unauthorized", HttpStatus.UNAUTHORIZED);
+    if (!user || !user._id) throw new AppError("Thông tin người dùng không hợp lệ", HttpStatus.UNAUTHORIZED);  // Dùng _id
+
+    console.log("Service enroll: user._id =", user._id, "classId =", classId);  // Log để debug
 
     const cls = await Class.findById(classId).lean();
-    if (!cls) throw new AppError("Lớp không tồn tại", HttpStatus.NOT_FOUND);
+    if (!cls) {
+      console.log("Class not found for ID:", classId);  // Log
+      throw new AppError("Lớp không tồn tại", HttpStatus.NOT_FOUND);
+    }
+    console.log("Class found:", cls.name || cls._id);  // Log
 
-    // kiểm tra sĩ số: chỉ tính enrollment đã approved
     const currentCount = await Enrollment.countDocuments({ class: classId, status: "approved" });
     if (currentCount >= (cls.maxStudents || 1)) {
       throw new AppError("Lớp đã đầy", HttpStatus.CONFLICT);
     }
 
-    // kiểm tra trùng lịch với các lớp đã approved
-    const enrolled = await Enrollment.find({ student: user.id, status: "approved" })
+    const enrolled = await Enrollment.find({ student: user._id, status: "approved" })  // Dùng _id
       .populate({ path: "class", select: "timeSlots" })
       .lean();
 
@@ -83,11 +82,10 @@ export const EnrollmentService = {
       throw new AppError("Trùng lịch với lớp đã đăng ký", HttpStatus.CONFLICT);
     }
 
-    // tạo bản ghi (mặc định approved, theo schema)
     try {
-      await Enrollment.create({ student: user.id, class: classId, status: "approved" });
+      await Enrollment.create({ student: user._id, class: classId, status: "approved" });  // Dùng _id
     } catch (e: any) {
-      // Chuẩn hoá duplicate key thành 409 để controller có thể trả fail chuẩn
+      console.error("Create enrollment error:", e);  // Log
       if (e?.code === 11000) {
         throw new AppError("Bạn đã đăng ký lớp này", HttpStatus.CONFLICT);
       }
@@ -96,27 +94,25 @@ export const EnrollmentService = {
 
     return { message: "Đăng ký thành công" };
   },
-
   /** Hủy đăng ký (policy: trước buổi đầu N giờ, trừ admin) */
   async cancel(params: { classId?: string; user?: UserCtx }) {
     const { classId, user } = params;
 
     if (!classId) throw new AppError("Thiếu classId", HttpStatus.BAD_REQUEST);
-    if (!user?.id) throw new AppError("Unauthorized", HttpStatus.UNAUTHORIZED);
+    if (!user || !user._id) throw new AppError("Thông tin người dùng không hợp lệ", HttpStatus.UNAUTHORIZED);
 
-    // Lấy enrollment + lớp để kiểm tra policy
-    const enr = await Enrollment.findOne({ student: user.id, class: classId })
+    const enr = await Enrollment.findOne({ student: user._id, class: classId })
       .populate({ path: "class", select: "timeSlots name" });
     if (!enr) throw new AppError("Bạn chưa đăng ký lớp này", HttpStatus.NOT_FOUND);
 
     const isAdmin = user.role === "admin";
     const firstSession = getFirstSessionDate((enr as any).class?.timeSlots || []);
 
-    // cutoffHours có thể cấu hình qua ENV, mặc định 24h
     const cutoffHours = Number(process.env.ENROLL_CANCEL_CUTOFF_HOURS ?? 24);
 
     if (!isAdmin && firstSession) {
       const cutoff = moment(firstSession).subtract(cutoffHours, "hours");
+      console.log("First session:", moment(firstSession).format(), "Cutoff:", cutoff.format(), "Now:", moment().format());
       if (moment().isAfter(cutoff)) {
         throw new AppError(
           `Không thể hủy: phải hủy tối thiểu ${cutoffHours} giờ trước buổi học đầu tiên`,
@@ -131,7 +127,7 @@ export const EnrollmentService = {
 
   /** Lấy thời khóa biểu của 1 sinh viên (chỉ lớp approved) */
   async getStudentSchedule(studentId?: string) {
-    if (!studentId) throw new AppError("Thiếu studentId", HttpStatus.BAD_REQUEST);
+    // if (!studentId) throw new AppError("Thiếu studentId", HttpStatus.BAD_REQUEST);
 
     const enrolls = await Enrollment.find({ student: studentId, status: "approved" })
       .populate({ path: "class", select: "name subject teacher timeSlots" })
@@ -147,4 +143,16 @@ export const EnrollmentService = {
 
     return items;
   },
+
+  /** Lấy danh sách classId mà 1 sinh viên đã đăng ký (để dùng cho announcement) */
+  async getStudentClassIds(studentId?: string): Promise<string[]> {
+  console.log("Fetching classIds for studentId:", studentId);
+  const enrolls = await Enrollment.find({ student: studentId, status: "approved" })
+    .select("class")
+    .lean();
+  console.log("Enrollments found:", enrolls);
+  const classIds = enrolls.map((e) => e.class.toString());
+  console.log("ClassIds retrieved:", classIds);
+  return classIds;
+}
 };

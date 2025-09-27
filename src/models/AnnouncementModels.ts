@@ -9,20 +9,24 @@ export interface AnnouncementDoc extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
-//
+
 const announcementSchema = new Schema<AnnouncementDoc>(
   {
-    // ✅ phải dùng Schema.Types.ObjectId cho "type"
-    classId:   { type: Schema.Types.ObjectId, ref: "Class", required: true, index: true },
-    title:     { type: String, required: true, trim: true },
-    content:   { type: String },
-    creatorId: { type: Schema.Types.ObjectId, ref: "User" },
-    pinned:    { type: Boolean, default: false },
+    // ✅ Đã đúng: ref "Class" để populate tên lớp
+    classId: { type: Schema.Types.ObjectId, ref: "Class", required: true, index: true },
+    title: { type: String, required: true, trim: true },
+    content: { type: String }, // Có thể thêm required nếu bắt buộc
+    creatorId: { type: Schema.Types.ObjectId, ref: "User" }, // Có thể thêm required nếu cần
+    pinned: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
+// ✅ Index cho query hiệu quả (classId + createdAt cho sort)
 announcementSchema.index({ classId: 1, createdAt: -1 });
+
+// ✅ Tùy chọn: Index cho pinned thông báo
+announcementSchema.index({ pinned: 1, createdAt: -1 });
 
 const AnnouncementModel = model<AnnouncementDoc>("Announcement", announcementSchema);
 export default AnnouncementModel;

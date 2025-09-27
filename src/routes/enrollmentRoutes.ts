@@ -5,12 +5,12 @@ import { authMiddleware } from "../middleware/authmiddleware";
 const router = express.Router();
 
 // ✅ POST /api/enrollments/:classId
-router.post("/:classId", authMiddleware, enrollClass);
+router.post("/:classId",authMiddleware,  enrollClass);
 
 // ✅ DELETE /api/enrollments/:classId
-router.delete("/:classId", authMiddleware, cancelEnrollment);
+router.delete("/:classId",authMiddleware, cancelEnrollment);
 
 // ✅ GET /api/enrollments/student/:id
-router.get("/student/:id", authMiddleware, getStudentSchedule);
+router.get("/student/:id",authMiddleware,  getStudentSchedule);
 
 export default router;

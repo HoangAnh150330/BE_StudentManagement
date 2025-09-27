@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import AnnouncementModel from "../models/AnnouncementModels";
 import ClassModel from "../models/Class";
 import { AppError, HttpStatus } from "../utils/http";
+import { EnrollmentService } from "./enrollment-service";
 
 const toOid = (id?: string) => {
   if (!id) throw new AppError("Thiếu classId", HttpStatus.BAD_REQUEST);
@@ -50,4 +51,21 @@ export const AnnouncementService = {
     const oid = toOid(classId);
     return AnnouncementModel.find({ classId: oid }).sort({ createdAt: -1 });
   },
+
+  /** 📌 Lấy tất cả thông báo cho học sinh theo các lớp đã đăng ký */
+  async listForStudent(studentId: string) {
+  const classIds = await EnrollmentService.getStudentClassIds(studentId);
+  console.log("ClassIds for student:", classIds);
+  if (!classIds.length) return [];
+  const announcements = await AnnouncementModel.find({ classId: { $in: classIds } })
+    .populate({
+        path: "classId",
+        model: "Class",
+        select: "name", // Lấy trường name từ collection Class
+      })
+    .sort({ createdAt: -1 })
+    .lean();
+  console.log("Announcements found:", announcements);
+  return announcements;
+}
 };

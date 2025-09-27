@@ -31,3 +31,17 @@ export async function getAnnouncements(req: Request, res: Response) {
     return fail(res, e, "Lỗi lấy thông báo");
   }
 }
+
+/** 📌 Lấy thông báo cho học sinh dựa vào lớp đã đăng ký */
+export async function getAnnouncementsForStudent(req: AuthRequest, res: Response) {
+  try {
+    if (!req.user?._id) {
+      return fail(res, "Unauthorized", HttpStatus.UNAUTHORIZED);
+    }
+    const items = await AnnouncementService.listForStudent(req.user._id);
+    return ok(res, items);
+  } catch (e) {
+    return fail(res, e, "Lỗi lấy thông báo của học sinh");
+  }
+}
+
